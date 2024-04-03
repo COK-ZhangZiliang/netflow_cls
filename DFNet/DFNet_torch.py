@@ -80,12 +80,9 @@ class DFNet(nn.Module):
             nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Dropout(0.5),
+            nn.Linear(512, num_classes)
         )
 
-        self.classifier = nn.Sequential(
-            nn.Linear(512, num_classes),
-            nn.Softmax(dim=1)
-        )
 
     def forward(self, x):
         x = self.block1(x)
@@ -93,5 +90,4 @@ class DFNet(nn.Module):
         x = self.block3(x)
         x = self.block4(x)
         x = self.fc(x)
-        x = self.classifier(x)
         return x
