@@ -2,3 +2,6 @@ datasets/
 models/
 **/__pycache__/
 results/
+**/pcap_files/
+**/.idea/
+byol/

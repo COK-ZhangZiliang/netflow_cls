@@ -5,12 +5,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
-from ..DFNet.DFNet_torch import DFNet, CustomDataset
+from DFNet.DFNet_torch import DFNet, CustomDataset
 import logging
 import time
 
-timestamp = time.time()
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', filename=f"../results/DoH2_{timestamp}.log")
 
 def info(msg):
     logging.info(msg)
@@ -38,7 +36,7 @@ def load_and_transform_data(bng_data_path, mal_data_path):
     return data_for_cls, label_for_cls
 
 
-def train_model(model, train_loader, criterion, optimizer, epochs=20):
+def train_model(model, train_loader, criterion, optimizer, epochs=20, device=torch.device("cuda:0")):
     for epoch in range(epochs):
         model.train()
         total_loss = 0
@@ -58,7 +56,7 @@ def train_model(model, train_loader, criterion, optimizer, epochs=20):
                             f'Accuracy: {100*correct/len(train_loader.dataset):.4f}%')
 
 
-def test_model(model, test_loader):
+def test_model(model, test_loader, device=torch.device("cuda:0")):
     model.eval()
     correct = 0
     with torch.no_grad():
@@ -70,6 +68,9 @@ def test_model(model, test_loader):
 
 
 if __name__ == '__main__':
+    timestamp = time.time()
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', filename=f"../results/DoH2_{timestamp}.log")
+
     # Load and transform data
     sample_rate = [0.1, 1, 5, 10, 15, 20, 25, 30, 60, 120, 180]
     device = torch.device("cuda:0")
@@ -94,6 +95,6 @@ if __name__ == '__main__':
         optimizer = optim.Adam(model_cls.parameters(), lr=0.0001, weight_decay=0.01)
 
         # Train and test
-        train_model(model_cls, train_loader_for_cls, criterion, optimizer, epochs=20)
+        train_model(model_cls, train_loader_for_cls, criterion, optimizer, epochs=20, device=device)
         info(f"======{rate}======")
-        test_model(model_cls, test_loader_for_cls)
+        test_model(model_cls, test_loader_for_cls, device=device)
