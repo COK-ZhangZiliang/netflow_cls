@@ -1,3 +1,6 @@
+import sys
+sys.path.append('/home/zhangziliang/netflow_cls/')
+
 import pandas as pd
 import numpy as np
 import torch
@@ -19,12 +22,16 @@ def load_and_transform_data(bng_data_path, mal_data_path):
     bng_data, mal_data = pd.read_csv(bng_data_path), pd.read_csv(mal_data_path)
     info(f"Loading benign data...")
     bng_data = bng_data.iloc[:, 1].apply(lambda x: eval(x))
-    bng_data = bng_data.apply(lambda x: [bytes for _, bytes in x])
-    bng_data = bng_data.apply(lambda x: x[:100] if len(x) >= 100 else x + [0] * (100 - len(x)))
+    bng_data = bng_data.apply(lambda x: [[bytes//counts]*counts 
+                                         for counts, bytes in x])
+    bng_data = bng_data.apply(lambda x: [item for sublist in x for item in sublist])
+    bng_data = bng_data.apply(lambda x: x[:500] if len(x) >= 500 else x + [0] * (500 - len(x)))
     info(f"Loading malicious data...")
     mal_data = mal_data.iloc[:, 1].apply(lambda x: eval(x))
-    mal_data = mal_data.apply(lambda x: [bytes for _, bytes in x])
-    mal_data = mal_data.apply(lambda x: x[:100] if len(x) >= 100 else x + [0] * (100 - len(x)))
+    mal_data = mal_data.apply(lambda x: [[bytes//counts]*counts 
+                                         for counts, bytes in x])
+    mal_data = mal_data.apply(lambda x: [item for sublist in x for item in sublist])
+    mal_data = mal_data.apply(lambda x: x[:500] if len(x) >= 500 else x + [0] * (500 - len(x)))
     data_len = min(len(bng_data), len(mal_data))
     data_for_cls = pd.concat([bng_data.sample(data_len), mal_data.sample(data_len)], axis=0)
     data_for_cls = np.array(data_for_cls.tolist())
@@ -32,7 +39,7 @@ def load_and_transform_data(bng_data_path, mal_data_path):
     data_for_cls = data_for_cls.reshape((2 * data_len, 1, -1))
     label_for_cls = torch.tensor([0] * data_len + [1] * data_len, dtype=torch.long).reshape(-1, 1)
     info(f"Data loaded and transformed!")
-    
+
     return data_for_cls, label_for_cls
 
 
@@ -51,9 +58,12 @@ def train_model(model, train_loader, criterion, optimizer, epochs=20, device=tor
             with torch.no_grad():
                 total_loss += loss.item() * len(data)
                 correct += (torch.max(output, 1)[1] == target.view(-1)).sum().item()
+        print(f'Epoch {epoch+1}, Loss: {total_loss/len(train_loader.dataset):.4f}, '
+                            f'Accuracy: {100*correct/len(train_loader.dataset):.4f}%')
         if (epoch + 1) % 5 == 0:
             info(f'Epoch {epoch+1}, Loss: {total_loss/len(train_loader.dataset):.4f}, '
                             f'Accuracy: {100*correct/len(train_loader.dataset):.4f}%')
+            
 
 
 def test_model(model, test_loader, device=torch.device("cuda:0")):
@@ -69,14 +79,15 @@ def test_model(model, test_loader, device=torch.device("cuda:0")):
 
 if __name__ == '__main__':
     timestamp = time.time()
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', filename=f"../results/DoH2_{timestamp}.log")
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', 
+                        filename=f"../../results/DoH_{timestamp}.log", )
 
     # Load and transform data
-    sample_rate = [0.1, 1, 5, 10, 15, 20, 25, 30, 60, 120, 180]
+    sample_rate = ['inf', 0.1, 1, 5, 10, 15, 20, 25, 30, 60, 120, 180]
     device = torch.device("cuda:0")
     for rate in sample_rate:
-        data_for_cls, label_for_cls = load_and_transform_data(f'../datasets/DoH/traces2/bng_{rate}.csv',
-                                                        f'../datasets/DoH/traces2/mal_{rate}.csv')
+        data_for_cls, label_for_cls = load_and_transform_data(f'../../datasets/DoH/traces2/bng_{rate}.csv',
+                                                        f'../../datasets/DoH/traces2/mal_{rate}.csv')
 
         # Convert to tensors and split
         train_data, test_data, train_label, test_label \

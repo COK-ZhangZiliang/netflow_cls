@@ -1,18 +1,4 @@
-import pandas as pd
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
-from DFNet.DFNet_torch import DFNet, CustomDataset
-import logging
-import time
-
-
-def info(msg):
-    logging.info(msg)
-    print(msg)
+from DF_cls import *
 
 
 def load_and_transform_data(data_path):
@@ -38,47 +24,16 @@ def load_and_transform_data(data_path):
     return data_for_cls, label_for_cls
 
 
-def train_model(model, train_loader, criterion, optimizer, epochs=20, device=torch.device("cuda:1")):
-    for epoch in range(epochs):
-        model.train()
-        total_loss = 0
-        correct = 0
-        for data, target in train_loader:
-            data, target = data.to(device), target.to(device)
-            optimizer.zero_grad()
-            output = model(data)
-            loss = criterion(output, target.view(-1))
-            loss.backward()
-            optimizer.step()
-            with torch.no_grad():
-                total_loss += loss.item() * len(data)
-                correct += (torch.max(output, 1)[1] == target.view(-1)).sum().item()
-        if (epoch + 1) % 5 == 0:
-            info(f'Epoch {epoch+1}, Loss: {total_loss/len(train_loader.dataset):.4f}, '
-                            f'Accuracy: {100*correct/len(train_loader.dataset):.4f}%')
-            
-
-
-def test_model(model, test_loader, device=torch.device("cuda:1")):
-    model.eval()
-    correct = 0
-    with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.to(device), target.to(device)
-            output = model(data)
-            correct += (torch.max(output, 1)[1] == target.view(-1)).sum().item()
-    info(f'Accuracy: {100*correct/len(test_loader.dataset):.4f}%')
-
-
 if __name__ == '__main__':
     timestamp = time.time()
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', filename=f"../results/H_V2_{timestamp}.log", )
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', 
+                        filename=f"../../results/H_V2_{timestamp}.log", )
 
     # Load and transform data
     sample_rate = [0.1, 1, 5, 10, 15, 20, 25, 30]
     device = torch.device("cuda:1")
     for rate in sample_rate:
-        data_for_cls, label_for_cls = load_and_transform_data(f'../datasets/H_V/traces/traces_{rate}.csv')
+        data_for_cls, label_for_cls = load_and_transform_data(f'../../datasets/H_V/traces/traces_{rate}.csv')
 
         # Convert to tensors and split
         train_data, test_data, train_label, test_label \
