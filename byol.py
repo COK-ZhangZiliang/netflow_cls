@@ -8,9 +8,10 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision import models
 from torchvision.models.resnet import ResNet50_Weights
+from torch.optim.lr_scheduler import ExponentialLR
 
 from byol_pytorch import BYOL
-from DFNet_H_V.DF_cls import info
+from DFNet.DFNet_H_V.DF_cls import info
 
 class CustomDataset(Dataset):
     """
@@ -31,10 +32,11 @@ class CustomDataset(Dataset):
 
 def load_and_transform_data(data_path):
     data = pd.read_csv(data_path)
+    data = data.iloc[:len(data)//30, :]
     print(len(data))
     info(f"Loading data...")
     data = data.iloc[:, 0].apply(lambda x: eval(x))
-    data = data.apply(lambda x: [[bytes//counts]*counts 
+    data = data.apply(lambda x: [[bytes//counts//10+1]*counts 
                                          for counts, bytes in x])
     data = data.apply(lambda x: [item for sublist in x for item in sublist])
     data = data.apply(lambda x: x[:500] if len(x) >= 500 else x + [0] * (500 - len(x)))
@@ -60,6 +62,7 @@ def pretrain(learner, data_loader, num_epochs, opt, device):
             learner.update_moving_average()  # update moving average of target encoder
             with torch.no_grad():
                 tot_loss += loss.item()
+        scheduler.step()
         info(f"epoch {i+1}, loss: {tot_loss/len(data_loader.dataset):.8f}")
 
 # pretrain the network
@@ -84,7 +87,8 @@ if __name__ == '__main__':
         hidden_layer = 'avgpool'
     )
     learner = learner.to(device)
-    opt = torch.optim.Adam(learner.parameters(), lr=1e-4)
+    opt = torch.optim.Adam(learner.parameters(), lr=0.03)
+    scheduler = ExponentialLR(opt, gamma=0.75)
     num_epochs = 40
 
     # the dataset
@@ -95,12 +99,12 @@ if __name__ == '__main__':
         data.append(_data)
     transform = torch.randint(1, 12, size=(len(data[0]),))
     dataset = CustomDataset(data, transform)
-    data_loader = DataLoader(dataset, batch_size=256, shuffle=True)
+    data_loader = DataLoader(dataset, batch_size=2048, shuffle=True)
 
     # pretrain the network
     pretrain(learner, data_loader, num_epochs, opt, device)
 
     # save improved network
     info("Saving improved network")
-    torch.save(resnet.state_dict(), './models/improved-net2.pt')
+    torch.save(resnet.state_dict(), './models/improved-net.pt')
     

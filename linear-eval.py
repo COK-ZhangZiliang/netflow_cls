@@ -1,7 +1,8 @@
 from torchvision import models
+from torch.optim.lr_scheduler import ExponentialLR
 
 from mlp.mlp import *
-from DFNet_H_V.DF_cls import *
+from DFNet.DFNet_DoH.DF_cls import *
 
 
 if __name__ == "__main__":
@@ -9,8 +10,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s',
                         filename=f"results/DoH4_{timestamp}.log", )
     # Load and transform data
-    sample_rate = [20, 25, 30]
-    device = torch.device("cuda:0")
+    sample_rate = [60, 120, 180]
+    device = torch.device("cuda:1")
 
     # Load pretrained model
     pretrained_model_path = 'models/improved-net.pt'
@@ -22,8 +23,9 @@ if __name__ == "__main__":
     resnet.eval()
 
     for rate in sample_rate:
-        data_for_cls, label_for_cls = load_and_transform_data(f'datasets/H_V/traces/traces_{rate}.csv',)
-        batch_size = 256
+        data_for_cls, label_for_cls = load_and_transform_data(f'datasets/DoH/traces2/bng_{rate}.csv',
+                                                              f'datasets/DoH/traces2/mal_{rate}.csv',)
+        batch_size = 1024
         data_for_cls_rep = torch.zeros((data_for_cls.shape[0], 1000))
         for i in range(0, data_for_cls.shape[0], batch_size):
             data_for_cls_rep[i:i + batch_size] = resnet(
@@ -36,14 +38,14 @@ if __name__ == "__main__":
         # Create dataset and dataloader
         train_dataset_for_cls = CustomDataset(train_data, train_label)
         test_dataset_for_cls = CustomDataset(test_data, test_label)
-        train_loader_for_cls = DataLoader(train_dataset_for_cls, batch_size=64, shuffle=True, num_workers=4)
-        test_loader_for_cls = DataLoader(test_dataset_for_cls, batch_size=64, shuffle=False, num_workers=4)
+        train_loader_for_cls = DataLoader(train_dataset_for_cls, batch_size=1024, shuffle=True, num_workers=4)
+        test_loader_for_cls = DataLoader(test_dataset_for_cls, batch_size=1024, shuffle=False, num_workers=4)
 
         # Define the model
         model_cls = MLPClassifier(1000, [512, 256], 2)
         model_cls.to(device)
         criterion = nn.CrossEntropyLoss(reduction='mean')
-        optimizer = torch.optim.Adam(model_cls.parameters(), lr=0.003, weight_decay=0.0001)
+        optimizer = torch.optim.Adam(model_cls.parameters(), lr=0.03, weight_decay=0.0001)
 
         # Train and test
         train_model(model_cls, train_loader_for_cls, criterion, optimizer, epochs=20, device=device)
