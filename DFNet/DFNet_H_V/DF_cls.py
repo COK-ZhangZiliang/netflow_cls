@@ -3,19 +3,19 @@ sys.path.append('/home/zhangziliang/netflow_cls/')
 
 import pandas as pd
 import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+
 from sklearn.model_selection import train_test_split
+
 from DFNet.DFNet_torch import DFNet, CustomDataset
-import logging
+
 import time
 
-
-def info(msg):
-    logging.info(msg)
-    print(msg)
+from DFNet.utils import *
 
 
 def load_and_transform_data(data_path):
@@ -28,7 +28,7 @@ def load_and_transform_data(data_path):
     data_len = min(len(bng_data), len(mal_data))
     data = pd.concat([bng_data.sample(data_len), mal_data.sample(data_len)])
     print(len(data))
-    data_for_cls = data.apply(lambda x: [[bytes//counts]*counts 
+    data_for_cls = data.apply(lambda x: [[bytes//counts//10+1]*counts 
                                          for counts, bytes in x[0]])
     data_for_cls = data_for_cls.apply(lambda x: [item for sublist in x for item in sublist])
     data_for_cls = data_for_cls.apply(lambda x: x[:500] if len(x) >= 500 else x + [0] * (500 - len(x)))
@@ -41,42 +41,6 @@ def load_and_transform_data(data_path):
 
     print(data_for_cls, label_for_cls)
     return data_for_cls, label_for_cls
-
-
-def train_model(model, train_loader, criterion, optimizer, epochs=20, device=torch.device("cuda:1"), scheduler=None):
-    for epoch in range(epochs):
-        model.train()
-        total_loss = 0
-        correct = 0
-        for data, target in train_loader:
-            data, target = data.to(device), target.to(device)
-            optimizer.zero_grad()
-            output = model(data)
-            loss = criterion(output, target.view(-1))
-            loss.backward()
-            optimizer.step()
-            with torch.no_grad():
-                total_loss += loss.item() * len(data)
-                correct += (torch.max(output, 1)[1] == target.view(-1)).sum().item()
-        if scheduler:
-            scheduler.step()
-        print(f'Epoch {epoch+1}, Loss: {total_loss/len(train_loader.dataset):.4f}, '
-                            f'Accuracy: {100*correct/len(train_loader.dataset):.4f}%')
-        if (epoch + 1) % 5 == 0:
-            info(f'Epoch {epoch+1}, Loss: {total_loss/len(train_loader.dataset):.4f}, '
-                            f'Accuracy: {100*correct/len(train_loader.dataset):.4f}%')
-            
-
-
-def test_model(model, test_loader, device=torch.device("cuda:1")):
-    model.eval()
-    correct = 0
-    with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.to(device), target.to(device)
-            output = model(data)
-            correct += (torch.max(output, 1)[1] == target.view(-1)).sum().item()
-    info(f'Accuracy: {100*correct/len(test_loader.dataset):.4f}%')
 
 
 if __name__ == '__main__':
@@ -97,8 +61,8 @@ if __name__ == '__main__':
         # Create dataset and dataloader
         train_dataset_for_cls = CustomDataset(train_data, train_label)
         test_dataset_for_cls = CustomDataset(test_data, test_label)
-        train_loader_for_cls = DataLoader(train_dataset_for_cls, batch_size=64, shuffle=True, num_workers=4, drop_last=True)
-        test_loader_for_cls = DataLoader(test_dataset_for_cls, batch_size=64, shuffle=False, num_workers=4, drop_last=True)
+        train_loader_for_cls = DataLoader(train_dataset_for_cls, batch_size=256, shuffle=True, num_workers=4, drop_last=True)
+        test_loader_for_cls = DataLoader(test_dataset_for_cls, batch_size=256, shuffle=False, num_workers=4, drop_last=True)
 
         # Model, criterion, optimizer
         model_cls = DFNet(1, 2)

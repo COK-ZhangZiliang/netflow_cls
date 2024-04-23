@@ -9,11 +9,11 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s',
                         filename=f"../../results/DoH3_{timestamp}.log", )
     # Load and transform data
-    sample_rate = [60]
+    sample_rate = [60, 120, 180]
     device = torch.device("cuda:0")
 
     # Load pretrained model
-    pretrained_model_path = '../../models/improved-net3.pt'
+    pretrained_model_path = '../../models/improved-net.pt'
     resnet = models.resnet50()
     resnet.conv1 = torch.nn.Conv2d(in_channels=1, out_channels=64, kernel_size=7,
                                    stride=2, padding=3, bias=False)
@@ -24,7 +24,7 @@ if __name__ == '__main__':
     for rate in sample_rate:
         data_for_cls, label_for_cls = load_and_transform_data(f'../../datasets/DoH/traces2/bng_{rate}.csv',
                                                               f'../../datasets/DoH/traces2/mal_{rate}.csv')
-        batch_size = 256
+        batch_size = 1024
         data_for_cls_rep = torch.zeros((data_for_cls.shape[0], 1, 1000))
         for i in range(0, data_for_cls.shape[0], batch_size):
             data_for_cls_rep[i:i + batch_size] = resnet(data_for_cls[i:i + batch_size].reshape(-1, 1, 1, 500).to(device)).detach().reshape(-1, 1, 1000)
@@ -36,8 +36,8 @@ if __name__ == '__main__':
         # Create dataset and dataloader
         train_dataset_for_cls = CustomDataset(train_data, train_label)
         test_dataset_for_cls = CustomDataset(test_data, test_label)
-        train_loader_for_cls = DataLoader(train_dataset_for_cls, batch_size=64, shuffle=True, num_workers=4)
-        test_loader_for_cls = DataLoader(test_dataset_for_cls, batch_size=64, shuffle=False, num_workers=4)
+        train_loader_for_cls = DataLoader(train_dataset_for_cls, batch_size=256, shuffle=True, num_workers=4)
+        test_loader_for_cls = DataLoader(test_dataset_for_cls, batch_size=256, shuffle=False, num_workers=4)
 
         # Model, criterion, optimizer
         model_cls = DFNet(data_for_cls_rep.shape[1], 2)

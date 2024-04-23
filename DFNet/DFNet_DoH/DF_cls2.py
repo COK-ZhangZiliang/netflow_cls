@@ -41,8 +41,8 @@ if __name__ == '__main__':
         # Create dataset and dataloader
         train_dataset_for_cls = CustomDataset(train_data, train_label)
         test_dataset_for_cls = CustomDataset(test_data, test_label)
-        train_loader_for_cls = DataLoader(train_dataset_for_cls, batch_size=64, shuffle=True, num_workers=4)
-        test_loader_for_cls = DataLoader(test_dataset_for_cls, batch_size=64, shuffle=False, num_workers=4)
+        train_loader_for_cls = DataLoader(train_dataset_for_cls, batch_size=256, shuffle=True, num_workers=4)
+        test_loader_for_cls = DataLoader(test_dataset_for_cls, batch_size=256, shuffle=False, num_workers=4)
 
         # Model, criterion, optimizer
         model_cls = DFNet(1, 2)
