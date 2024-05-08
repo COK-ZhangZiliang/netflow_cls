@@ -8,6 +8,7 @@
 datasets/
 results/
 softflowd-0.9.9/
+mae/
 
 linear-eval.py
 preprocess.py
