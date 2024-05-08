@@ -6,7 +6,7 @@ from DFNet.DFNet_H_V.DF_cls import *
 from torch.optim.lr_scheduler import ExponentialLR
 
 
-def load_and_transform_data(data_path):
+def load_and_transform_data(data_path, data_len=1000):
     data = pd.read_csv(data_path)
     info(f"Loading data from {data_path}...")
     data = data.map(lambda x: eval(x))
@@ -15,19 +15,19 @@ def load_and_transform_data(data_path):
     data['Label'] = data['Label'].apply(lambda x: 1 if x.startswith('flow=From-Botnet') else 0)
     # data_len = min(len(data[data['Label']==1]), len(data[data['Label']==0]))
     # data = pd.concat([data[data['Label']==1].sample(data_len), data[data['Label']==0].sample(data_len)])
-    print(data)
+    # print(data)
     data_for_cls = data.apply(lambda x: [[bytes//counts]*counts 
                                          for counts, bytes in zip(x.iloc[0], x.iloc[1])], axis=1)
     data_for_cls = data_for_cls.apply(lambda x: [item for sublist in x for item in sublist])
-    data_for_cls = data_for_cls.apply(lambda x: x[:100] if len(x) >= 100 else x + [0] * (100 - len(x)))
+    data_for_cls = data_for_cls.apply(lambda x: x[:data_len] if len(x) >= data_len else x + [0] * (data_len - len(x)))
     data_for_cls = np.array(data_for_cls.tolist())
     data_for_cls = torch.tensor(data_for_cls, dtype=torch.float32)
     data_for_cls = data_for_cls.reshape((len(data_for_cls), 1, -1))
     label_for_cls = data.iloc[:, 2].tolist()
-    label_for_cls = torch.tensor(label_for_cls, dtype=torch.long).reshape(-1, 1)
+    label_for_cls = torch.tensor(label_for_cls, dtype=torch.long).reshape(-1)
     info(f"Data loaded and transformed!")
 
-    print(data_for_cls, label_for_cls)
+    # print(data_for_cls.shape[0])
     return data_for_cls, label_for_cls
 
 

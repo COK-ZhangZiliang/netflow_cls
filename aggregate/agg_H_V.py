@@ -1,8 +1,10 @@
 import os
 import csv
 import logging
-import pandas as pd
+import json
 from collections import defaultdict
+
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
@@ -96,30 +98,40 @@ def save_to_csv(traces, csv_file):
 
 
 if __name__ == '__main__':
-    sample_rate = ['inf', 0.1, 1, 5, 10, 15, 20, 25, 30]
+    sub_datasets = ["brute", "lrscan", "web", "misc", "malware"]
+    sample_rate = ['inf', 1, 5, 10, 15, 20, 25, 30, 60, 120, 180]
     data_dir = "../datasets/H_V"
-    data_paths = []
-    for file in os.listdir(data_dir):
-        if file.endswith('.data'):
-            data_paths.append(os.path.join(data_dir, file))
-    
-    for data_path in data_paths:
-        # Load the files
-        data = read_data_and_labels(data_path)
-        logging.info("Having loaded the data!")
 
-        # Convert packets to flows
-        logging.info("Converting packets to flows...")
-        data = data.groupby(data.columns[1:5].tolist()).filter(lambda x: len(x) >= 10)
-        flows = data.groupby(data.columns[1:5].tolist()).apply(
-        lambda g: pd.Series(sort_and_return(g.iloc[:, 5], g.iloc[:, 7], g['label']), 
-                            index=['frame.time_epoch', 'ip.len', 'label'])
-        ).reset_index(drop=True)
-        print(flows)
-        logging.info("Having converted packets to flows!")
+    for sub_dataset in sub_datasets:
+        data_paths = []
+        
+        # for file in os.listdir(data_dir):
+        #     if file.endswith('.data'):
+        #         data_paths.append(os.path.join(data_dir, file))
+        with open(f'../datasets/H_V/config.json', 'r') as file:
+            config = json.load(file)
+            for file_name in config[sub_dataset].keys():
+                data_paths.append(f'{data_dir}/{file_name}.data')
+        print(data_paths)
+        os.makedirs(f'../datasets/H_V/traces2/{sub_dataset}', exist_ok=True)  
 
-        # Convert flows to traces for different sample rates
-        for rate in sample_rate:
-            logging.info(f"Converting flows to traces with sample rate {rate}...")
-            traces = flows_to_traces(flows, rate)
-            save_to_csv(traces, f'../datasets/H_V/traces/traces_{rate}.csv')
+        for data_path in data_paths:
+            # Load the files
+            data = read_data_and_labels(data_path)
+            logging.info("Having loaded the data!")
+
+            # Convert packets to flows
+            logging.info("Converting packets to flows...")
+            data = data.groupby(data.columns[1:5].tolist()).filter(lambda x: len(x) >= 10)
+            flows = data.groupby(data.columns[1:5].tolist()).apply(
+            lambda g: pd.Series(sort_and_return(g.iloc[:, 5], g.iloc[:, 7], g['label']), 
+                                index=['frame.time_epoch', 'ip.len', 'label'])
+            ).reset_index(drop=True)
+            print(flows)
+            logging.info("Having converted packets to flows!")
+  
+            # Convert flows to traces for different sample rates
+            for rate in sample_rate:
+                logging.info(f"Converting flows to traces with sample rate {rate}...")
+                traces = flows_to_traces(flows, rate)
+                save_to_csv(traces, f'../datasets/H_V/traces2/{sub_dataset}/traces_{rate}.csv')

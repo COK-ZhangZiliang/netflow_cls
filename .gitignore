@@ -6,3 +6,10 @@ results/
 **/.idea/
 byol/
 **/test.py
+softflowd-0.9.9/
+**/*.bz2
+**/mae/
+
+linear-eval.py
+preprocess.py
+preprocess2.py

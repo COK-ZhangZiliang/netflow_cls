@@ -18,26 +18,26 @@ import time
 from DFNet.utils import *
 
 
-def load_and_transform_data(bng_data_path, mal_data_path):
+def load_and_transform_data(bng_data_path, mal_data_path, data_len=1000):
     bng_data, mal_data = pd.read_csv(bng_data_path), pd.read_csv(mal_data_path)
     info(f"Loading benign data...")
     bng_data = bng_data.iloc[:, 1].apply(lambda x: eval(x))
     bng_data = bng_data.apply(lambda x: [[bytes//counts//10+1]*counts 
                                          for counts, bytes in x])
     bng_data = bng_data.apply(lambda x: [item for sublist in x for item in sublist])
-    bng_data = bng_data.apply(lambda x: x[:500] if len(x) >= 500 else x + [0] * (500 - len(x)))
+    bng_data = bng_data.apply(lambda x: x[:data_len] if len(x) >= data_len else x + [0] * (data_len - len(x)))
     info(f"Loading malicious data...")
     mal_data = mal_data.iloc[:, 1].apply(lambda x: eval(x))
     mal_data = mal_data.apply(lambda x: [[bytes//counts//10+1]*counts 
                                          for counts, bytes in x])
     mal_data = mal_data.apply(lambda x: [item for sublist in x for item in sublist])
-    mal_data = mal_data.apply(lambda x: x[:500] if len(x) >= 500 else x + [0] * (500 - len(x)))
+    mal_data = mal_data.apply(lambda x: x[:data_len] if len(x) >= data_len else x + [0] * (data_len - len(x)))
     data_len = min(len(bng_data), len(mal_data))
     data_for_cls = pd.concat([bng_data.sample(data_len), mal_data.sample(data_len)], axis=0)
     data_for_cls = np.array(data_for_cls.tolist())
     data_for_cls = torch.tensor(data_for_cls, dtype=torch.float32)
     data_for_cls = data_for_cls.reshape((2 * data_len, 1, -1))
-    label_for_cls = torch.tensor([0] * data_len + [1] * data_len, dtype=torch.long).reshape(-1, 1)
+    label_for_cls = torch.tensor([0] * data_len + [1] * data_len, dtype=torch.long).reshape(-1)
     info(f"Data loaded and transformed!")
 
     return data_for_cls, label_for_cls
