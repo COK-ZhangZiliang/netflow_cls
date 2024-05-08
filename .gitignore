@@ -1,14 +1,13 @@
-datasets/
-models/
+**/models/
 **/__pycache__/
-results/
 **/pcap_files/
 **/.idea/
-byol/
 **/test.py
-softflowd-0.9.9/
 **/*.bz2
-**/mae/
+
+datasets/
+results/
+softflowd-0.9.9/
 
 linear-eval.py
 preprocess.py
