@@ -1,5 +1,8 @@
+#!/bin/bash
+
 # Description: This script parses all pcap files in the 
 # specified folder and extracts the specified fields
+
 PCAP_FOLDER="../datasets/pcap_files"
 OUTPUT_FILE="../datasets/pretrain.txt"
 

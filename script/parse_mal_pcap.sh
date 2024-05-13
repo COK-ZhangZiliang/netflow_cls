@@ -1,5 +1,8 @@
+#!/bin/bash
+
 # Description: This script parses all pcap files in the 
-# specified folder and extracts the specified fields
+# specified folder and extracts the specified fields、
+
 PCAP_FOLDER="../datasets/malicious"
 OUTPUT_FILE="../datasets/malicious.txt"
 
