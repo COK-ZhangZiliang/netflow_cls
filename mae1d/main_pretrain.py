@@ -1,7 +1,7 @@
 import sys
 sys.path.append('/home/zhangziliang/netflow_cls/')
 
-from totensor import load_and_transform_data
+from utils.totensor import load_and_transform_data
 
 import argparse
 import datetime
@@ -37,11 +37,11 @@ def get_args_parser():
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--seq_len', default=1000, type=int,
+    parser.add_argument('--seq_len', default=800, type=int,
                         help='sequence length')
-    parser.add_argument('--patch_size', default=10, type=int,
+    parser.add_argument('--patch_size', default=8, type=int,
                         help='patch size')
-    parser.add_argument('--embed_dim', default=256, type=int,
+    parser.add_argument('--embed_dim', default=128, type=int,
                         help='embedding dimension')
 
     parser.add_argument('--mask_ratio', default=0.75, type=float,
@@ -50,6 +50,10 @@ def get_args_parser():
     parser.add_argument('--norm_loss', action='store_true',
                         help='Use (per-patch) normalized packet length as targets for computing loss')
     parser.set_defaults(norm_loss=False)
+
+    parser.add_argument('--frozen_embed', action='store_true',
+                        help='Freeze the embedding layer')
+    parser.set_defaults(frozen_embed=False)
 
     # Optimizer parameters
     parser.add_argument('--weight_decay', type=float, default=0.05,
@@ -66,6 +70,8 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
+    parser.add_argument('--data_folder', default='../datasets/pretrain/traces/',
+                        help='folder with data files')
     parser.add_argument('--output_dir', default='./output_dir',
                         help='path where to save, empty for no saving')
     parser.add_argument('--log_dir', default='./output_dir',
@@ -101,7 +107,7 @@ def main(args):
     cudnn.benchmark = True
 
     # data = load_and_transform_data('../datasets/pretrain/traces/traces_inf.csv', data_len=args.seq_len)
-    data = torch.load('../datasets/pretrain/traces/traces_inf.pt', map_location='cpu')
+    data = torch.load(f'{args.data_folder}{args.seq_len}.pt', map_location='cpu')
     dataset_train = torch.utils.data.TensorDataset(data)
     
     sampler_train = torch.utils.data.RandomSampler(dataset_train)
@@ -121,8 +127,9 @@ def main(args):
     )
     
     # define the model
-    model = MAEViT1D(input_length=args.seq_len, patch_size=args.patch_size, 
-                     embed_dim=args.embed_dim, norm_loss=args.norm_loss)
+    model = MAEViT1D(seq_len=args.seq_len, patch_size=args.patch_size, 
+                     embed_dim=args.embed_dim, norm_loss=args.norm_loss,
+                     frozen_embed=args.frozen_embed)
 
     model.to(device)
 

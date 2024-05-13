@@ -12,15 +12,16 @@ class MaskedAutoencoderViT1D(nn.Module):
     """
     1D Masked Autoencoder with VisionTransformer backbone
     """
-    def __init__(self, input_length=1000, patch_size=10, in_chans=1,
-                 embed_dim=256, depth=12, num_heads=8,
-                 decoder_embed_dim=128, decoder_depth=4, decoder_num_heads=8,
-                 mlp_ratio=4., norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_loss=False):
+    def __init__(self, seq_len=800, patch_size=8, in_chans=1,
+                 embed_dim=128, depth=12, num_heads=8,
+                 decoder_embed_dim=96, decoder_depth=8, decoder_num_heads=8,
+                 mlp_ratio=4., norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_loss=False,
+                 frozen_embed=False):
         super().__init__()
 
         # MAE1D encoder
-        self.input_length = input_length
-        self.patch_embed = PatchEmbed1D(input_length, in_chans, embed_dim, patch_size)
+        self.seq_len = seq_len
+        self.patch_embed = PatchEmbed1D(seq_len, in_chans, embed_dim, patch_size, frozen_embed)
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
@@ -95,7 +96,7 @@ class MaskedAutoencoderViT1D(nn.Module):
         """
         p = self.patch_embed.patch_size[0]
         l = x.shape[1] * p
-        assert l == self.input_length, f"Output length {l} is not equal to the expected output length {self.input_length}"     
+        assert l == self.seq_len, f"Output length {l} is not equal to the expected output length {self.seq_len}"     
         
         seq = x.reshape((x.shape[0], 1, l))
         return seq

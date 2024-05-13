@@ -14,22 +14,27 @@ def parse_args():
     parser.add_argument("--timeout", default=4320, type=int, help="Duration of the job")
     parser.add_argument("--job_dir", default="", type=str, help="Job dir. Leave empty for automatic.")
 
+    parser.add_argument("--ablation", default=False, action="store_true", help="Abalation study")
+
     return parser.parse_args()
 
 
-def get_shared_folder() -> Path:
-    user = os.getenv("USER")
-    if Path("./checkpoint/").is_dir():
-        p = Path(f"./checkpoint/{user}/experiments")
-        p.mkdir(exist_ok=True)
-        return p.absolute()
-    raise RuntimeError("No shared folder available")
+def get_shared_folder(args) -> Path:
+    if args.ablation:
+        if args.frozen_embed:
+            p = Path(f"./checkpoint/ablation/frozen_embed/pretrain")
+        else:
+            p = Path(f"./checkpoint/ablation/path_size/{args.patch_size}/pretrain")
+    else:
+        p = Path(f"./checkpoint/pretrain/")
+    os.makedirs(p, exist_ok=True)
+    return p.absolute()
 
 
-def get_init_file():
+def get_init_file(args):
     # Init file must not exist, but it's parent dir must exist.
-    os.makedirs(str(get_shared_folder()), exist_ok=True)
-    init_file = get_shared_folder() / f"{uuid.uuid4().hex}_init"
+    os.makedirs(str(get_shared_folder(args)), exist_ok=True)
+    init_file = get_shared_folder(args) / f"{uuid.uuid4().hex}_init"
     if init_file.exists():
         os.remove(str(init_file))
     return init_file
@@ -49,7 +54,7 @@ class Trainer(object):
         import os
         import submitit
 
-        self.args.dist_url = get_init_file().as_uri()
+        self.args.dist_url = get_init_file(self.args).as_uri()
         checkpoint_file = os.path.join(self.args.output_dir, "checkpoint.pth")
         if os.path.exists(checkpoint_file):
             self.args.resume = checkpoint_file
@@ -73,7 +78,7 @@ class Trainer(object):
 def main():
     args = parse_args()
     if args.job_dir == "":
-        args.job_dir = get_shared_folder() / "%j"
+        args.job_dir = get_shared_folder(args) / "%j"
 
     # Note that the folder will depend on the job_id, to easily track experiments
     executor = submitit.AutoExecutor(folder=args.job_dir, slurm_max_num_timeout=30)
@@ -90,7 +95,7 @@ def main():
 
     executor.update_parameters(name="mae")
 
-    args.dist_url = get_init_file().as_uri()
+    args.dist_url = get_init_file(args).as_uri()
     args.output_dir = args.job_dir
 
     trainer = Trainer(args)

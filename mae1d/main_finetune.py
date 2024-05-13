@@ -26,7 +26,7 @@ from timm.models.layers import trunc_normal_
 
 import util.lr_decay as lrd
 import util.misc as misc
-from util.pos_embed1d import interpolate_pos_embed
+from util.pos_embed1d import interpolate_pos_embed_1d
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 from models_vit1d import VisionTransformer1D as ViT1D
@@ -43,16 +43,20 @@ def get_args_parser():
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--seq_len', default=1000, type=int,
+    parser.add_argument('--seq_len', default=800, type=int,
                         help='sequence length')
-    parser.add_argument('--patch_size', default=10, type=int,
+    parser.add_argument('--patch_size', default=8, type=int,
                         help='patch size')
-    parser.add_argument('--embed_dim', default=256, type=int,
+    parser.add_argument('--embed_dim', default=128, type=int,
                         help='embedding dimension')
 
     parser.add_argument('--drop_path', type=float, default=0.1, metavar='PCT',
                         help='Drop path rate (default: 0.1)')
 
+    parser.add_argument('--frozen_embed', action='store_true',
+                        help='Freeze the embedding layer')
+    parser.set_defaults(frozen_embed=False)
+    
     # Optimizer parameters
     parser.add_argument('--clip_grad', type=float, default=None, metavar='NORM',
                         help='Clip gradient norm (default: None, no clipping)')
@@ -74,7 +78,7 @@ def get_args_parser():
 
     
     # * Finetuning params
-    parser.add_argument('--finetune', default='./checkpoint/zhangziliang/experiments/566127/checkpoint-79.pth',
+    parser.add_argument('--finetune', default='./checkpoint/pretrain/21204/checkpoint-79.pth',
                         help='finetune from checkpoint')
     parser.add_argument('--nb_classes', default=2, type=int,
                         help='number of the classification types')
@@ -83,7 +87,7 @@ def get_args_parser():
                         help='path where to save, empty for no saving')
     parser.add_argument('--log_dir', default='./output_dir',
                         help='path where to tensorboard log')
-    parser.add_argument('--device', default='cuda:1',
+    parser.add_argument('--device', default='cuda:0',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
@@ -121,11 +125,11 @@ def main(args, rate, dataset='DoH'):
 
     if dataset == 'DoH':
         data_for_cls, label_for_cls = doh.load_and_transform_data(f'../datasets/DoH/traces2/bng_{rate}.csv',
-                                                            f'../datasets/DoH/traces2/mal_{rate}.csv')
+                                                            f'../datasets/DoH/traces2/mal_{rate}.csv', args.seq_len)
     elif dataset == 'H_V':
-        data_for_cls, label_for_cls = hv.load_and_transform_data(f'../datasets/H_V/traces/traces_{rate}.csv',)
+        data_for_cls, label_for_cls = hv.load_and_transform_data(f'../datasets/H_V/traces/traces_{rate}.csv', args.seq_len)
     elif dataset == 'CTU-13':
-        data_for_cls, label_for_cls = ctu.load_and_transform_data(f'../datasets/CTU-13-Dataset/{rate}/traces.csv')
+        data_for_cls, label_for_cls = ctu.load_and_transform_data(f'../datasets/CTU-13-Dataset/{rate}/traces.csv', args.seq_len)
     train_data, test_data, train_label, test_label \
             = train_test_split(data_for_cls, label_for_cls, test_size=0.2, random_state=42)
     dataset_train = torch.utils.data.TensorDataset(train_data, train_label)
@@ -160,8 +164,9 @@ def main(args, rate, dataset='DoH'):
         drop_last=False
     )
 
-    model = ViT1D(seq_len=args.seq_len, patch_size=args.patch_size, drop_path_rate=args.drop_path,
-                  num_classes=args.nb_classes, embed_dim=args.embed_dim)
+    model = ViT1D(seq_len=args.seq_len, patch_size=args.patch_size, 
+                  embed_dim=args.embed_dim, frozen_embed=args.frozen_embed,
+                  drop_path_rate=args.drop_path, num_classes=args.nb_classes)
 
     if args.finetune and not args.eval:
         checkpoint = torch.load(args.finetune, map_location='cpu')
@@ -175,7 +180,7 @@ def main(args, rate, dataset='DoH'):
                 del checkpoint_model[k]
 
         # interpolate position embedding
-        interpolate_pos_embed(model, checkpoint_model)
+        interpolate_pos_embed_1d(model, checkpoint_model)
 
         # load pre-trained model
         msg = model.load_state_dict(checkpoint_model, strict=False)
@@ -241,7 +246,6 @@ def main(args, rate, dataset='DoH'):
         #         loss_scaler=loss_scaler, epoch=epoch)
 
         test_stats = evaluate(data_loader_val, model, device)
-        print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
         max_accuracy = max(max_accuracy, test_stats["acc1"])
         print(f'Max accuracy: {max_accuracy:.2f}%')
 

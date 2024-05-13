@@ -6,13 +6,23 @@ from timm.models.layers import trunc_normal_
 
 class PatchEmbed1D(nn.Module):
     """ 1D Patch Embedding"""
-    def __init__(self, input_length, in_chans, embed_dim, patch_size):
+    def __init__(self, input_length, in_chans, embed_dim, patch_size, frozen_embed=False):
         super().__init__()
         self.input_length = input_length
         self.patch_size = patch_size
         self.num_patches = input_length // patch_size
         self.proj = nn.Conv1d(in_channels=in_chans, out_channels=embed_dim, kernel_size=patch_size, stride=patch_size)
-    
+        if frozen_embed:
+            print("Freezing the patch embedding layer")
+            # all weights are {1 / patch_size}, bias is 0
+            nn.init.constant_(self.proj.weight, 1. / patch_size)
+            nn.init.constant_(self.proj.bias, 0.)
+            self.proj.weight.requires_grad = False
+            self.proj.bias.requires_grad = False
+            # check
+            for name, param in self.proj.named_parameters():
+                print(name, param.requires_grad, param.data)
+
     def forward(self, x):
         # x: (N, C, L)
         N, C, L = x.shape
@@ -23,14 +33,14 @@ class PatchEmbed1D(nn.Module):
     
 class VisionTransformer1D(nn.Module):
     """ Vision Transformer with support for 1D data"""
-    def __init__(self, seq_len=1000, patch_size=10, in_chans=1, num_classes=2, embed_dim=256, depth=12,
+    def __init__(self, seq_len=800, patch_size=8, in_chans=1, num_classes=2, embed_dim=128, depth=12,
                  num_heads=8, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
-                 drop_path_rate=0., norm_layer=nn.LayerNorm):
+                 drop_path_rate=0., norm_layer=nn.LayerNorm, frozen_embed=False):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
 
-        self.patch_embed = PatchEmbed1D(seq_len, in_chans, embed_dim, patch_size)
+        self.patch_embed = PatchEmbed1D(seq_len, in_chans, embed_dim, patch_size, frozen_embed)
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
