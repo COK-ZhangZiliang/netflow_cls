@@ -1,4 +1,4 @@
-import re
+import os
 
 import torch
 
@@ -6,26 +6,16 @@ import numpy as np
 import pandas as pd
 
 
-def convert_m_to_number(x):
-    """
-    Convert 'x.x M' to number."""
-    if isinstance(x, str): 
-        match = re.search(r'(\d+(\.\d+)?)M', x)
-        if match:
-            return float(match.group(1)) * 1000000
-    return x
-
-
 def compress(avg_pkt_seq, seq_len):
     """
     Compress the sequence of average packet sizes to a fixed length."""
-    need_compress = False
-    if len(avg_pkt_seq) > seq_len * 2:
-        need_compress = True
+    # need_compress = False
+    # if len(avg_pkt_seq) > seq_len * 2:
+    #     need_compress = True
 
-    if need_compress:
-        sample_rate = len(avg_pkt_seq) // seq_len
-        avg_pkt_seq = avg_pkt_seq[::sample_rate]
+    # if need_compress:
+    #     sample_rate = len(avg_pkt_seq) // seq_len
+    #     avg_pkt_seq = avg_pkt_seq[::sample_rate]
     
     avg_pkt_seq = avg_pkt_seq[:seq_len] if len(avg_pkt_seq) >= seq_len \
         else avg_pkt_seq + [0] * (seq_len - len(avg_pkt_seq))
@@ -46,7 +36,7 @@ def process(data, seq_len, raw_netflow=False):
     """
     Process the data to a fixed length sequence of average packet sizes."""
     data = data.groupby(data.columns[0:4].tolist()).apply(
-        lambda x: list(zip(x[5], x[6]))).reset_index(drop=True)
+        lambda x: list(zip(x['total_packets'], x['total_bytes']))).reset_index(drop=True)
     print(data)
 
     if not raw_netflow:
@@ -61,30 +51,123 @@ def process(data, seq_len, raw_netflow=False):
     return data
 
 
-def load_and_transform_data(bng_data_path, mal_data_path, seq_len=800, raw_netflow=False):
+def load_and_transform_data(data_path, seq_len=800, raw_netflow=False, type=0):
     """
     Load and transform the data to a fixed length sequence of average packet sizes."""
-    bng_data, mal_data = pd.read_csv(bng_data_path, header=None), pd.read_csv(mal_data_path, header=None)
-    bng_data, mal_data = bng_data.iloc[:, 1:], mal_data.iloc[:, 1:]
-    bng_data.columns, mal_data.columns = range(bng_data.shape[1]), range(mal_data.shape[1])
-    bng_data, mal_data = bng_data.applymap(convert_m_to_number), mal_data.applymap(convert_m_to_number)
-    print(bng_data, mal_data)
+    data = pd.read_csv(data_path, usecols=['src_ip', 'dst_ip', 'src_port', 'dst_port', 
+                                           'protocol', 'total_packets', 'total_bytes'],
+                        dtype={'src_ip': str, 'dst_ip': str, 'src_port': str, 'dst_port': str,
+                               'protocol': str, 'total_packets': int, 'total_bytes': int})
+    print(data)
 
-    print(f"Processing benign data...")
-    bng_data = process(bng_data, seq_len, raw_netflow=raw_netflow)    
-
-    print(f"Processing malicious data...")
-    mal_data = process(mal_data, seq_len, raw_netflow=raw_netflow)
-
-    data_len = min(len(bng_data), len(mal_data))
-    data_for_cls = pd.concat([bng_data.sample(data_len), mal_data.sample(data_len)], axis=0)
-    data_for_cls = np.array(data_for_cls.tolist())
-    data_for_cls = torch.tensor(data_for_cls, dtype=torch.int32)
+    print(f"Processing data...")
+    data = process(data, seq_len, raw_netflow=raw_netflow)    
+    data = torch.tensor(data.tolist(), dtype=torch.float32)
     channel = 2 if raw_netflow else 1
-    data_for_cls = data_for_cls.reshape((2 * data_len, channel, -1))
-    label_for_cls = torch.tensor([0] * data_len + [1] * data_len, dtype=torch.int32).reshape(-1)
+    data = data.reshape(data.shape[0], channel, -1)
+    label = torch.full((data.shape[0],), type, dtype=torch.long)
     
     print(f"Data loaded and transformed!")
-    print(data_for_cls, label_for_cls)
+    print(data, label)
 
+    return data, label
+
+
+def load_avg_DoH(ac_t, dataset_folder):
+    """
+    Load the average packet sequence of DoH dataset of active timeout={ac_t}."""
+    if os.path.exists(f"{dataset_folder}/tensor/avg/{ac_t}_data.pt") and \
+        os.path.exists(f"{dataset_folder}/tensor/avg/{ac_t}_label.pt"):
+        data_for_cls = torch.load(f"{dataset_folder}/tensor/avg/{ac_t}_data.pt")
+        label_for_cls = torch.load(f"{dataset_folder}/tensor/avg/{ac_t}_label.pt")
+    else:
+        bng_data, bng_label = load_and_transform_data(f"{dataset_folder}/benign/{ac_t}.csv", seq_len=800, raw_netflow=False, type=0)
+        dns2tcp, dns2tcp_label = load_and_transform_data(f"{dataset_folder}/dns2tcp/{ac_t}.csv", seq_len=800, raw_netflow=False, type=1)
+        dnscat2, dnscat2_label = load_and_transform_data(f"{dataset_folder}/dnscat2/{ac_t}.csv", seq_len=800, raw_netflow=False, type=2)
+        iodine, iodine_label = load_and_transform_data(f"{dataset_folder}/iodine/{ac_t}.csv", seq_len=800, raw_netflow=False, type=3)
+
+        data_len = min(bng_data.shape[0], dns2tcp.shape[0], dnscat2.shape[0], iodine.shape[0])
+        random_seed = 42
+        torch.manual_seed(random_seed)
+        indices_1, indices_2, indices_3, indices_4 = torch.randperm(bng_data.shape[0])[:data_len], \
+                                                        torch.randperm(dns2tcp.shape[0])[:data_len], \
+                                                        torch.randperm(dnscat2.shape[0])[:data_len], \
+                                                        torch.randperm(iodine.shape[0])[:data_len]
+        data_for_cls = torch.cat([bng_data[indices_1], dns2tcp[indices_2], dnscat2[indices_3], iodine[indices_4]], dim=0)
+        label_for_cls = torch.cat([bng_label[indices_1], dns2tcp_label[indices_2], dnscat2_label[indices_3], iodine_label[indices_4]], dim=0)
+
+        os.makedirs(f"{dataset_folder}/tensor/avg/", exist_ok=True)
+        torch.save(data_for_cls, f"{dataset_folder}/tensor/avg/{ac_t}_data.pt")
+        torch.save(label_for_cls, f"{dataset_folder}/tensor/avg/{ac_t}_label.pt")
+
+    return data_for_cls, label_for_cls
+
+
+def load_raw_DoH(ac_t, dataset_folder):
+    """
+    Load the raw netflow data of DoH dataset of active timeout={ac_t}."""
+    if os.path.exists(f"{dataset_folder}/tensor/raw/{ac_t}_data.pt") and \
+        os.path.exists(f"{dataset_folder}/tensor/raw/{ac_t}_label.pt"):
+        data_for_cls = torch.load(f"{dataset_folder}/tensor/raw/{ac_t}_data.pt")
+        label_for_cls = torch.load(f"{dataset_folder}/tensor/raw/{ac_t}_label.pt")
+    else:
+        bng_data, bng_label = load_and_transform_data(f"{dataset_folder}/benign/{ac_t}.csv", seq_len=800, raw_netflow=True, type=0)
+        dns2tcp, dns2tcp_label = load_and_transform_data(f"{dataset_folder}/dns2tcp/{ac_t}.csv", seq_len=800, raw_netflow=True, type=1)
+        dnscat2, dnscat2_label = load_and_transform_data(f"{dataset_folder}/dnscat2/{ac_t}.csv", seq_len=800, raw_netflow=True, type=2)
+        iodine, iodine_label = load_and_transform_data(f"{dataset_folder}/iodine/{ac_t}.csv", seq_len=800, raw_netflow=True, type=3)
+
+        data_len = min(bng_data.shape[0], dns2tcp.shape[0], dnscat2.shape[0], iodine.shape[0])
+        random_seed = 42
+        torch.manual_seed(random_seed)
+        indices_1, indices_2, indices_3, indices_4 = torch.randperm(bng_data.shape[0])[:data_len], \
+                                                        torch.randperm(dns2tcp.shape[0])[:data_len], \
+                                                        torch.randperm(dnscat2.shape[0])[:data_len], \
+                                                        torch.randperm(iodine.shape[0])[:data_len]
+        data_for_cls = torch.cat([bng_data[indices_1], dns2tcp[indices_2], dnscat2[indices_3], iodine[indices_4]], dim=0)
+        label_for_cls = torch.cat([bng_label[indices_1], dns2tcp_label[indices_2], dnscat2_label[indices_3], iodine_label[indices_4]], dim=0)
+
+        os.makedirs(f"{dataset_folder}/tensor/raw/", exist_ok=True)
+        torch.save(data_for_cls, f"{dataset_folder}/tensor/raw/{ac_t}_data.pt")
+        torch.save(label_for_cls, f"{dataset_folder}/tensor/raw/{ac_t}_label.pt")
+
+    return data_for_cls, label_for_cls     
+
+
+def load_avg_CTU(dataset_folder):
+    bng_data, bng_label = load_and_transform_data(f"{dataset_folder}/bng.csv", seq_len=800, raw_netflow=False, type=0)
+    mal_data, mal_label = load_and_transform_data(f"{dataset_folder}/mal.csv", seq_len=800, raw_netflow=False, type=1)
+
+    # data_len = min(bng_data.shape[0], mal_data.shape[0])
+    # random_seed = 42
+    # torch.manual_seed(random_seed)
+    # indices_1, indices_2 = torch.randperm(bng_data.shape[0])[:data_len], torch.randperm(mal_data.shape[0])[:data_len]
+    # data_for_cls = torch.cat([bng_data[indices_1], mal_data[indices_2]], dim=0)
+    # label_for_cls = torch.cat([bng_label[indices_1], mal_label[indices_2]], dim=0)
+    data_for_cls = torch.cat([bng_data, mal_data], dim=0)
+    label_for_cls = torch.cat([bng_label, mal_label], dim=0)
+
+    return data_for_cls, label_for_cls
+
+def load_avg_CTU2(dataset_folder):
+    if os.path.exists(f"{dataset_folder}/data.pt") and os.path.exists(f"{dataset_folder}/label.pt"):
+        data_for_cls = torch.load(f"{dataset_folder}/data.pt")
+        label_for_cls = torch.load(f"{dataset_folder}/label.pt")
+        return data_for_cls, label_for_cls
+    
+    bng_data, bng_label = load_and_transform_data(f"{dataset_folder}/bng.csv", seq_len=800, raw_netflow=False, type=0)
+    mal_data, mal_label = load_and_transform_data(f"{dataset_folder}/mal.csv", seq_len=800, raw_netflow=False, type=1)
+    back_data, back_label = load_and_transform_data(f"{dataset_folder}/back.csv", seq_len=800, raw_netflow=False, type=2)
+
+    data_len = min(bng_data.shape[0], mal_data.shape[0], back_data.shape[0])
+    random_seed = 42
+    torch.manual_seed(random_seed)
+    indices_1, indices_2, indices_3 = torch.randperm(bng_data.shape[0])[:data_len], \
+                                      torch.randperm(mal_data.shape[0])[:data_len], \
+                                      torch.randperm(back_data.shape[0])[:data_len]
+    data_for_cls = torch.cat([bng_data[indices_1], mal_data[indices_2], back_data[indices_3]], dim=0)
+    label_for_cls = torch.cat([bng_label[indices_1], mal_label[indices_2], back_label[indices_3]], dim=0)
+
+    torch.save(data_for_cls, f"{dataset_folder}/data.pt")
+    torch.save(label_for_cls, f"{dataset_folder}/label.pt")
+    
     return data_for_cls, label_for_cls
