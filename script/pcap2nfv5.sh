@@ -4,12 +4,12 @@
 # and converts them to netflow files in CSV format.
 
 # set parameters
-WORKDIR="../datasets/DoH/malicious"
-ACTIVE_TIMEOUT=(60 120 180 240 300 360)
+WORKDIR="../datasets/DoH/benign"
+ACTIVE_TIMEOUT=(1)
 INACTIVE_TIMEOUT=60
 NETFLOW_DIR="../datasets/DoH/tmp"
-TARGET_DIR="../datasets/DoH/nfv5/malicious"
-OUTPUT_FORMAT="fmt:%td,%sa,%da,%sp,%dp,%pr,%ipkt,%ibyt"
+TARGET_DIR="../datasets/DoH/nfv5/benign"
+OUTPUT_FORMAT="fmt:%td,%pr,%flg,%sa,%da,%sp,%dp,%ipkt,%ibyt"
 
 mkdir -p $TARGET_DIR
 
