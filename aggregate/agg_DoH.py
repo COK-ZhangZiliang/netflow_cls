@@ -1,7 +1,9 @@
+import os
 import csv
 import logging
+
 import pandas as pd
-import numpy as np
+
 from collections import defaultdict
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
@@ -35,8 +37,9 @@ def flows_to_traces(flows, sample_rate):
         for time_stamp, packet_len in zip(flow[0], flow[1]):
             if time_stamp > end_time:
                 traces[idx].append((packets_num, bytes_num))
-                start_time = time_stamp
-                end_time = start_time + sample_rate
+                while time_stamp > end_time:
+                    start_time = end_time
+                    end_time = start_time + sample_rate
                 packets_num, bytes_num = 0, 0
             packets_num += 1
             bytes_num += packet_len
@@ -48,6 +51,7 @@ def save_to_csv(traces, csv_file):
     """
     Save traces to a csv file.
     """
+    os.makedirs(os.path.dirname(csv_file), exist_ok=True)
     with open(csv_file, mode='w', newline='') as file:
         logging.info(f"Saving to {csv_file}...")
         writer = csv.writer(file)
@@ -57,7 +61,7 @@ def save_to_csv(traces, csv_file):
 
 
 if __name__ == '__main__':
-    sample_rate = ['inf', 0.1, 1, 5, 10, 15, 20, 25, 30, 60, 120, 180]
+    sample_rate = ['inf', 1, 5, 10, 15, 20, 25, 30, 60, 120, 180]
 
     # Load the files
     bng_file = "../datasets/DoH/benign.txt"
@@ -90,5 +94,5 @@ if __name__ == '__main__':
         logging.info(f"Converting flows to traces with sample rate {rate}...")
         bng_traces = flows_to_traces(bng_flows, rate)
         mal_traces = flows_to_traces(mal_flows, rate)
-        save_to_csv(bng_traces, f'../datasets/DoH/traces2/bng_{rate}.csv')
-        save_to_csv(mal_traces, f'../datasets/DoH/traces2/mal_{rate}.csv')
+        save_to_csv(bng_traces, f'../datasets/DoH/traces3/bng_{rate}.csv')
+        save_to_csv(mal_traces, f'../datasets/DoH/traces3/mal_{rate}.csv')

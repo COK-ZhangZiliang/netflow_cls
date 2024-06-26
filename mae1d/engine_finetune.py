@@ -21,6 +21,8 @@ from timm.utils import accuracy
 import util.misc as misc
 import util.lr_sched as lr_sched
 
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
 
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
@@ -96,7 +98,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
 
 @torch.no_grad()
-def evaluate(data_loader, model, device):
+def evaluate(data_loader, model, device, num_classes):
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
@@ -104,18 +106,22 @@ def evaluate(data_loader, model, device):
 
     # switch to evaluation mode
     model.eval()
+    label = torch.zeros(0,).to(device)
+    pred = torch.zeros(0,).to(device)
 
     for batch in metric_logger.log_every(data_loader, 10, header):
         images = batch[0]
         target = batch[-1]
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
+        label = torch.cat((label, target), dim=0)
 
         # compute output
         with torch.cuda.amp.autocast():
             output = model(images)
             loss = criterion(output, target)
-
+        
+        pred = torch.cat((pred, output.argmax(dim=1)), dim=0)
         acc1 = accuracy(output, target, topk=(1,))[0]
 
         batch_size = images.shape[0]
@@ -126,5 +132,30 @@ def evaluate(data_loader, model, device):
     metric_logger.synchronize_between_processes()
     print('* Acc@1 {top1.global_avg:.3f} loss {losses.global_avg:.3f}'
           .format(top1=metric_logger.acc1, losses=metric_logger.loss))
+
+    label = label.cpu().numpy()
+    pred = pred.cpu().numpy()
+    # Calculate metrics
+    acc = accuracy_score(label, pred)
+    pre= precision_score(label, pred, average=None)
+    rec = recall_score(label, pred, average=None)
+    f1 = f1_score(label, pred, average=None)
+    mac_pre = precision_score(label, pred, average='macro')
+    mac_rec = recall_score(label, pred, average='macro')
+    mac_f1 = f1_score(label, pred, average='macro')
+    mic_pre = precision_score(label, pred, average='micro')
+    mic_rec = recall_score(label, pred, average='micro')
+    mic_f1 = f1_score(label, pred, average='micro')
+
+    print(f'Accuracy: {acc:.4f}')
+    print(f'Precision: {pre}')
+    print(f'Recall: {rec}')
+    print(f'F1: {f1}')
+    print(f'Macro Precision: {mac_pre:.4f}')
+    print(f'Macro Recall: {mac_rec:.4f}')
+    print(f'Macro F1: {mac_f1:.4f}')
+    print(f'Micro Precision: {mic_pre:.4f}')
+    print(f'Micro Recall: {mic_rec:.4f}')
+    print(f'Micro F1: {mic_f1:.4f}')
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}

@@ -35,6 +35,7 @@ def get_raw_netflow(record):
 def process(data, seq_len, raw_netflow=False):
     """
     Process the data to a fixed length sequence of average packet sizes."""
+    # data = data.groupby(data.columns[0:4].tolist()).filter(lambda x: len(x) >= 2)  # filter out flows with less than 2 records
     data = data.groupby(data.columns[0:4].tolist()).apply(
         lambda x: list(zip(x['total_packets'], x['total_bytes']))).reset_index(drop=True)
     print(data)
@@ -134,6 +135,8 @@ def load_raw_DoH(ac_t, dataset_folder):
 
 
 def load_avg_CTU(dataset_folder):
+    """
+    Load CTU without background traffic."""
     bng_data, bng_label = load_and_transform_data(f"{dataset_folder}/bng.csv", seq_len=800, raw_netflow=False, type=0)
     mal_data, mal_label = load_and_transform_data(f"{dataset_folder}/mal.csv", seq_len=800, raw_netflow=False, type=1)
 
@@ -148,11 +151,14 @@ def load_avg_CTU(dataset_folder):
 
     return data_for_cls, label_for_cls
 
+
 def load_avg_CTU2(dataset_folder):
-    if os.path.exists(f"{dataset_folder}/data.pt") and os.path.exists(f"{dataset_folder}/label.pt"):
-        data_for_cls = torch.load(f"{dataset_folder}/data.pt")
-        label_for_cls = torch.load(f"{dataset_folder}/label.pt")
-        return data_for_cls, label_for_cls
+    """
+    Load CTU with background traffic."""
+    # if os.path.exists(f"{dataset_folder}/data.pt") and os.path.exists(f"{dataset_folder}/label.pt"):
+    #     data_for_cls = torch.load(f"{dataset_folder}/data.pt")
+    #     label_for_cls = torch.load(f"{dataset_folder}/label.pt")
+    #     return data_for_cls, label_for_cls
     
     bng_data, bng_label = load_and_transform_data(f"{dataset_folder}/bng.csv", seq_len=800, raw_netflow=False, type=0)
     mal_data, mal_label = load_and_transform_data(f"{dataset_folder}/mal.csv", seq_len=800, raw_netflow=False, type=1)
@@ -170,4 +176,20 @@ def load_avg_CTU2(dataset_folder):
     torch.save(data_for_cls, f"{dataset_folder}/data.pt")
     torch.save(label_for_cls, f"{dataset_folder}/label.pt")
     
+    return data_for_cls, label_for_cls
+
+
+def load_avg_UNSW(dataset_folder):
+    bng_data, bng_label = load_and_transform_data(f"{dataset_folder}/bng.csv", seq_len=800, raw_netflow=False, type=0)
+    mal_data, mal_label = load_and_transform_data(f"{dataset_folder}/mal.csv", seq_len=800, raw_netflow=False, type=1)
+    
+    data_len = min(bng_data.shape[0], mal_data.shape[0])
+    random_seed = 42
+    torch.manual_seed(random_seed)
+    indices_1, indices_2 = torch.randperm(bng_data.shape[0])[:data_len], \
+                            torch.randperm(mal_data.shape[0])[:data_len]
+    
+    data_for_cls = torch.cat([bng_data[indices_1], mal_data[indices_2]], dim=0)
+    label_for_cls = torch.cat([bng_label[indices_1], mal_label[indices_2]], dim=0)
+
     return data_for_cls, label_for_cls

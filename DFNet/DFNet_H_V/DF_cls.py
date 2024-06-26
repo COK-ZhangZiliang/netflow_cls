@@ -18,8 +18,9 @@ import time
 from DFNet.utils import *
 
 
-def load_and_transform_data(data_path, data_len=1000):
+def load_and_transform_data(data_path, data_len=800):
     data = pd.read_csv(data_path)
+    
     info(len(data))
     info(f"Loading data...")
     data = data.iloc[:, 1].apply(lambda x: eval(x))
@@ -28,7 +29,8 @@ def load_and_transform_data(data_path, data_len=1000):
     data_len = min(len(bng_data), len(mal_data))
     data = pd.concat([bng_data.sample(data_len), mal_data.sample(data_len)])
     info(len(data))
-    data_for_cls = data.apply(lambda x: [[bytes//counts//10+1]*counts 
+    
+    data_for_cls = data.apply(lambda x: [[bytes//counts]*counts 
                                          for counts, bytes in x[0]])
     data_for_cls = data_for_cls.apply(lambda x: [item for sublist in x for item in sublist])
     data_for_cls = data_for_cls.apply(lambda x: x[:data_len] if len(x) >= data_len else x + [0] * (data_len - len(x)))

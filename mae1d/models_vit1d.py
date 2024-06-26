@@ -4,6 +4,7 @@ import torch.nn as nn
 from timm.models.vision_transformer import Block
 from timm.models.layers import trunc_normal_
 
+
 class PatchEmbed1D(nn.Module):
     """ 1D Patch Embedding"""
     def __init__(self, input_length, in_chans, embed_dim, patch_size, frozen_embed=False):
@@ -30,6 +31,7 @@ class PatchEmbed1D(nn.Module):
         x = self.proj(x)  # (N, embed_dim, num_patches)
         x = x.transpose(1, 2)  # (N, num_pathes, embed_dim)
         return x
+    
     
 class VisionTransformer1D(nn.Module):
     """ Vision Transformer with support for 1D data"""

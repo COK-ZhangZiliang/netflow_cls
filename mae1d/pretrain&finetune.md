@@ -32,10 +32,11 @@ python submitit_pretrain.py \
 ### base
 ```
 python submitit_finetune.py \
-    --finetune ./checkpoint/pretrain/21204/checkpoint-40.pth \
+    --finetune ./checkpoint/pretrain/21204/checkpoint-79.pth \
     --dataset ${dataset} \
-    --sample_rate ${sample_rate} \
-    --device cuda:${id}
+    --active_timeout ${ac_t} \
+    --device cuda:${id} \
+    --nb_classes ${nb_classes}
 ```
 
 ### change patch size

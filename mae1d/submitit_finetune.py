@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument("--job_dir", default="", type=str, help="Job dir. Leave empty for automatic.")
 
     parser.add_argument("--dataset", default="DoH", type=str, help="Dataset to use")
-    parser.add_argument("--sample_rate", default="60", type=str, help="Sample rate to use")
+    parser.add_argument("--active_timeout", default="1", type=str, help="Active timeout")
     
     parser.add_argument("--ablation", default=False, action="store_true", help="Abalation study")
 
@@ -25,11 +25,11 @@ def parse_args():
 def get_shared_folder(args) -> Path:
     if args.ablation:
         if args.frozen_embed:
-            p = Path(f"./checkpoint/ablation/frozen_embed/finetune/{args.dataset}/{args.sample_rate}")
+            p = Path(f"./checkpoint/ablation/frozen_embed/finetune/{args.dataset}")
         else:
-            p = Path(f"./checkpoint/ablation/path_size/{args.patch_size}/finetune/{args.dataset}/{args.sample_rate}")
+            p = Path(f"./checkpoint/ablation/path_size/{args.patch_size}/finetune/{args.dataset}")
     else:
-        p = Path(f"./checkpoint/finetune/{args.dataset}/{args.sample_rate}")
+        p = Path(f"./checkpoint/finetune/{args.dataset}")
     os.makedirs(p, exist_ok=True)
     return p.absolute()
 
@@ -44,16 +44,16 @@ def get_init_file(args):
 
 
 class Trainer(object):
-    def __init__(self, args, rate, dataset):
+    def __init__(self, args, ac_t, dataset):
         self.args = args
-        self.rate = rate
+        self.ac_t = ac_t
         self.dataset = dataset
 
     def __call__(self):
         import main_finetune as classification
 
         self._setup_gpu_args()
-        classification.main(self.args, self.rate, self.dataset)
+        classification.main(self.args, self.ac_t, self.dataset)
 
 
     def checkpoint(self):
@@ -104,10 +104,10 @@ def main():
     args.dist_url = get_init_file(args).as_uri()
     args.output_dir = args.job_dir
 
-    sample_rate = [int(rate) for rate in args.sample_rate.split(",")]
+    active_timeout = [int(ac_t) for ac_t in args.active_timeout.split(",")]
     dataset = args.dataset
-    for rate in sample_rate:
-        trainer = Trainer(args, rate, dataset)
+    for ac_t in active_timeout:
+        trainer = Trainer(args, ac_t, dataset)
         job = executor.submit(trainer)
         
         print(job.job_id)

@@ -1,9 +1,7 @@
 import sys
 sys.path.append('/home/zhangziliang/netflow_cls/')
 
-import DFNet.DFNet_DoH.DF_cls as doh
-import DFNet.DFNet_H_V.DF_cls as hv
-import DFNet.DFNet_CTU.DF_cls as ctu
+from utils.load_data import *
 
 from sklearn.model_selection import train_test_split
 
@@ -38,7 +36,7 @@ def get_args_parser():
     parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
     parser.add_argument('--batch_size', default=1024, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=10, type=int)
+    parser.add_argument('--epochs', default=40, type=int)
     parser.add_argument('--accum_iter', default=1, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
@@ -65,7 +63,7 @@ def get_args_parser():
 
     parser.add_argument('--lr', type=float, default=None, metavar='LR',
                         help='learning rate (absolute lr)')
-    parser.add_argument('--blr', type=float, default=1e-3, metavar='LR',
+    parser.add_argument('--blr', type=float, default=5e-3, metavar='LR',
                         help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
     parser.add_argument('--layer_decay', type=float, default=0.75,
                         help='layer-wise lr decay from ELECTRA/BEiT')
@@ -108,8 +106,8 @@ def get_args_parser():
     return parser
 
 
-def main(args, rate, dataset='DoH'):
-    print(dataset, rate)
+def main(args, ac_t, dataset='DoH'):
+    print(dataset, ac_t)
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
@@ -124,14 +122,25 @@ def main(args, rate, dataset='DoH'):
     cudnn.benchmark = True
 
     if dataset == 'DoH':
-        data_for_cls, label_for_cls = doh.load_and_transform_data(f'../datasets/DoH/traces2/bng_{rate}.csv',
-                                                            f'../datasets/DoH/traces2/mal_{rate}.csv', args.seq_len)
-    elif dataset == 'H_V':
-        data_for_cls, label_for_cls = hv.load_and_transform_data(f'../datasets/H_V/traces/traces_{rate}.csv', args.seq_len)
-    elif dataset == 'CTU-13':
-        data_for_cls, label_for_cls = ctu.load_and_transform_data(f'../datasets/CTU-13-Dataset/{rate}/traces.csv', args.seq_len)
+        data_for_cls, label_for_cls = load_avg_DoH(ac_t, '../datasets/DoH/nfv5')
+    elif dataset == 'CTU':
+        train_sets = [3, 4, 5, 7, 10, 11, 12, 13]
+        test_sets = [1, 2, 6, 8, 9]
+        train_data, train_label = torch.zeros(0), torch.zeros(0, dtype=torch.long)
+        test_data, test_label = torch.zeros(0), torch.zeros(0, dtype=torch.long)
+        for i in train_sets:
+            data_for_cls, label_for_cls = load_avg_CTU2(f'../datasets/CTU-13-Dataset/proc2/{i}')
+            train_data = torch.cat([train_data, data_for_cls], dim=0)
+            train_label = torch.cat([train_label, label_for_cls], dim=0)
+        for i in test_sets:
+            data_for_cls, label_for_cls = load_avg_CTU2(f'../datasets/CTU-13-Dataset/proc2/{i}')
+            test_data = torch.cat([test_data, data_for_cls], dim=0)
+            test_label = torch.cat([test_label, label_for_cls], dim=0)
+        # data_for_cls, label_for_cls = load_avg_CTU2(f'../datasets/CTU-13-Dataset/proc2/{ac_t}')
+    elif dataset == 'UNSW':
+        data_for_cls, label_for_cls = load_avg_UNSW('../datasets/UNSW')
     train_data, test_data, train_label, test_label \
-            = train_test_split(data_for_cls, label_for_cls, test_size=0.2, random_state=42)
+        = train_test_split(data_for_cls, label_for_cls, test_size=0.2, random_state=42)
     dataset_train = torch.utils.data.TensorDataset(train_data, train_label)
     dataset_val = torch.utils.data.TensorDataset(test_data, test_label)
     print(dataset_train)
@@ -225,7 +234,7 @@ def main(args, rate, dataset='DoH'):
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
     if args.eval:
-        test_stats = evaluate(data_loader_val, model, device)
+        test_stats = evaluate(data_loader_val, model, device, num_classes=args.nb_classes)
         print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
         exit(0)
 
@@ -245,7 +254,7 @@ def main(args, rate, dataset='DoH'):
         #         args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
         #         loss_scaler=loss_scaler, epoch=epoch)
 
-        test_stats = evaluate(data_loader_val, model, device)
+        test_stats = evaluate(data_loader_val, model, device, num_classes=args.nb_classes)
         max_accuracy = max(max_accuracy, test_stats["acc1"])
         print(f'Max accuracy: {max_accuracy:.2f}%')
 

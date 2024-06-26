@@ -1,56 +1,37 @@
 from DF_cls import *
 
-
-def load_and_transform_data(bng_data_path, mal_data_path):
-    bng_data, mal_data = pd.read_csv(bng_data_path), pd.read_csv(mal_data_path)
-    info(f"Loading benign data...")
-    bng_data = bng_data.iloc[:, 1].apply(lambda x: eval(x))
-    bng_data = bng_data.apply(lambda x: [bytes for _, bytes in x])
-    bng_data = bng_data.apply(lambda x: x[:100] if len(x) >= 100 else x + [0] * (100 - len(x)))
-    info(f"Loading malicious data...")
-    mal_data = mal_data.iloc[:, 1].apply(lambda x: eval(x))
-    mal_data = mal_data.apply(lambda x: [bytes for _, bytes in x])
-    mal_data = mal_data.apply(lambda x: x[:100] if len(x) >= 100 else x + [0] * (100 - len(x)))
-    data_len = min(len(bng_data), len(mal_data))
-    data_for_cls = pd.concat([bng_data.sample(data_len), mal_data.sample(data_len)], axis=0)
-    data_for_cls = np.array(data_for_cls.tolist())
-    data_for_cls = torch.tensor(data_for_cls, dtype=torch.float32)
-    data_for_cls = data_for_cls.reshape((2 * data_len, 1, -1))
-    label_for_cls = torch.tensor([0] * data_len + [1] * data_len, dtype=torch.long).reshape(-1, 1)
-    info(f"Data loaded and transformed!")
-    
-    return data_for_cls, label_for_cls
-
-
 if __name__ == '__main__':
     timestamp = time.time()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', 
-                        filename=f"../../results/DoH2_{timestamp}.log")
+                        filename=f"../results/DoH2_{timestamp}.log", )
 
-    # Load and transform data
-    sample_rate = [0.1, 1, 5, 10, 15, 20, 25, 30, 60, 120, 180]
+    act_timeout = [1, 5, 10, 15, 20, 25, 30, 60]
     device = torch.device("cuda:0")
-    for rate in sample_rate:
-        data_for_cls, label_for_cls = load_and_transform_data(f'../../datasets/DoH/traces2/bng_{rate}.csv',
-                                                        f'../../datasets/DoH/traces2/mal_{rate}.csv')
+    input_channels = 2
+    num_classes = 4
 
-        # Convert to tensors and split
+    for t in act_timeout:
+        # Load data
+        data_for_cls, label_for_cls = load_raw_DoH(t, '../../datasets/DoH/nfv5')
+
+        # Split data
         train_data, test_data, train_label, test_label \
             = train_test_split(data_for_cls, label_for_cls, test_size=0.2, random_state=42)
         
         # Create dataset and dataloader
-        train_dataset_for_cls = CustomDataset(train_data, train_label)
-        test_dataset_for_cls = CustomDataset(test_data, test_label)
+        train_dataset_for_cls = TensorDataset(train_data, train_label)
+        test_dataset_for_cls = TensorDataset(test_data, test_label)
         train_loader_for_cls = DataLoader(train_dataset_for_cls, batch_size=256, shuffle=True, num_workers=4)
         test_loader_for_cls = DataLoader(test_dataset_for_cls, batch_size=256, shuffle=False, num_workers=4)
 
         # Model, criterion, optimizer
-        model_cls = DFNet(1, 2)
+        model_cls = DFNet(input_channels, num_classes)
         model_cls.to(device)
         criterion = nn.CrossEntropyLoss(reduction='mean')
-        optimizer = optim.Adam(model_cls.parameters(), lr=0.0001, weight_decay=0.01)
+        optimizer = optim.Adam(model_cls.parameters(), lr=0.01, weight_decay=1e-5)
+        scheduler = ExponentialLR(optimizer, gamma=0.75)
 
         # Train and test
-        train_model(model_cls, train_loader_for_cls, criterion, optimizer, epochs=20, device=device)
-        info(f"======{rate}======")
-        test_model(model_cls, test_loader_for_cls, device=device)
+        train_model(model_cls, train_loader_for_cls, criterion, optimizer, epochs=40, device=device)
+        info(f"======{t}======")
+        test_model(model_cls, test_loader_for_cls, num_classes=num_classes, device=device)

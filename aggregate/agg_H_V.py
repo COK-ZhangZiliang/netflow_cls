@@ -42,11 +42,6 @@ def read_data_and_labels(data_path):
         f"Length of labels {len(labels)} is not equal to the length of data {len(data)}"
     data['label'] = labels
 
-    # Make the data balanced
-    bng_data, mal_data = data[data['label'] == 0], data[data['label'] == 1]
-    data_len = min(len(bng_data), len(mal_data))
-    data = pd.concat([bng_data.sample(data_len), mal_data.sample(data_len)], 
-                        ignore_index=True)
     
     return data
 
@@ -72,8 +67,9 @@ def flows_to_traces(flows, sample_rate):
         for time_stamp, packet_len in zip(flow['frame.time_epoch'], flow['ip.len']):
             if time_stamp > end_time:
                 traces[idx][0].append((packets_num, bytes_num))
-                start_time = time_stamp
-                end_time = start_time + sample_rate
+                while time_stamp > end_time:
+                    start_time = end_time
+                    end_time = start_time + sample_rate
                 packets_num, bytes_num = 0, 0
             packets_num += 1
             bytes_num += packet_len
@@ -87,6 +83,7 @@ def save_to_csv(traces, csv_file):
     """
     Save traces to a csv file.
     """
+    os.makedirs(os.path.dirname(csv_file), exist_ok=True)
     is_exist = os.path.exists(csv_file)
     with open(csv_file, mode='a', newline='') as file:
         logging.info(f"Saving to {csv_file}...")

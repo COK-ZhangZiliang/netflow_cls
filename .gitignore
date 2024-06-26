@@ -4,6 +4,7 @@
 **/.idea/
 **/test.py
 **/*.bz2
+**/checkpoint/
 
 datasets/
 results/
@@ -13,3 +14,5 @@ mae/
 linear-eval.py
 preprocess.py
 preprocess2.py
+
+todo.md
